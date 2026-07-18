@@ -1,7 +1,6 @@
 # MentorOS — AI Student Growth Platform with Persistent Memory
 
-
-# Team
+#**Team**
 
 **Team Name:** MentorOS
 
