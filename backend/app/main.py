@@ -40,12 +40,14 @@ app = FastAPI(
 # Streamlit runs on a different port/origin during local dev.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.DEBUG else [],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://mentoros-ai.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 @app.get("/health", tags=["system"])
 def health_check():
