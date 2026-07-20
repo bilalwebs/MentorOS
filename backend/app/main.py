@@ -23,10 +23,8 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Dev convenience: auto-create tables if they don't exist.
-    # In production, prefer `alembic upgrade head` instead of relying on this.
-    if settings.ENV == "development":
-        Base.metadata.create_all(bind=engine)
+    # Create database tables on startup
+    Base.metadata.create_all(bind=engine)
     yield
 
 
