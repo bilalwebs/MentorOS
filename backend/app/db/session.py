@@ -19,11 +19,15 @@ settings = get_settings()
 # SQLite needs check_same_thread=False for use with FastAPI's threaded
 # request handling. PostgreSQL doesn't need (or accept) this argument.
 connect_args = (
-    {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
+    {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {
+    }
 )
 
-engine = create_engine(settings.DATABASE_URL, connect_args=connect_args)
-
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+    connect_args=connect_args,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

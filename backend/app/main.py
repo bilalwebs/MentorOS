@@ -23,10 +23,10 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create database tables on startup
-    Base.metadata.create_all(bind=engine)
-    yield
+    if settings.ENV == "development":
+        Base.metadata.create_all(bind=engine)
 
+    yield
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -46,6 +46,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.get("/health", tags=["system"])
 def health_check():
@@ -74,10 +75,13 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/profile", tags=["profile"])
 app.include_router(skills.router, prefix="/skills", tags=["skills"])
 app.include_router(projects.router, prefix="/projects", tags=["projects"])
-app.include_router(certificates.router, prefix="/certificates", tags=["certificates"])
-app.include_router(career_goals.router, prefix="/career-goals", tags=["career-goals"])
+app.include_router(certificates.router,
+                   prefix="/certificates", tags=["certificates"])
+app.include_router(career_goals.router,
+                   prefix="/career-goals", tags=["career-goals"])
 app.include_router(resume.router, prefix="/resume", tags=["resume"])
 app.include_router(memory.router, prefix="/memory", tags=["memory"])
-app.include_router(recommendations.router, prefix="/recommendations", tags=["recommendations"])
+app.include_router(recommendations.router,
+                   prefix="/recommendations", tags=["recommendations"])
 
 # Further routers (dashboard/analytics) are added here as they're built.
