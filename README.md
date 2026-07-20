@@ -1,6 +1,10 @@
 # MentorOS — AI Student Growth Platform with Persistent Memory
 
-#**Team**
+AI-powered Student Growth Platform with Persistent Memory built using **Alibaba Cloud Qwen, FastAPI, PostgreSQL, ChromaDB, and Next.js**.
+
+MentorOS remembers each student's learning journey and continuously generates personalized career recommendations, skill-gap analysis, project ideas, and learning roadmaps using long-term semantic memory.
+
+## Team
 
 **Team Name:** MentorOS
 
@@ -9,7 +13,7 @@
 | Muhammad Bilal Hussain | Team Lead • Backend • AI • Memory Engine |
 | Noor Fatima | Presentation • UI/UX • Documentation • Testing |
 
-Qwen Global AI Hackathon — Track 1 (MemoryAgent) submission.
+**Qwen Global AI Hackathon 2026 — Track 1 (MemoryAgent) Submission**
 
 A full-stack app: **FastAPI + SQLAlchemy + ChromaDB + Qwen** backend, **Next.js 15 + TypeScript** frontend.
 
@@ -34,6 +38,13 @@ Next.js 15 (App Router) + TypeScript, Tailwind CSS, shadcn/ui-style components, 
 2. **Reactive** — an Axios response interceptor catches any 401, attempts one refresh, retries the original request, and only redirects to `/login` if the refresh itself fails.
 
 This required one small, purely additive backend change: `POST /auth/refresh` (see `backend/app/routers/auth.py`) — no existing endpoint's behavior changed.
+
+## System Architecture
+
+The following diagram illustrates how the frontend, backend, database, memory engine, and Alibaba Cloud Qwen interact.
+
+![MentorOS Architecture](assets/architecture-diagram.PNG)
+
 
 ## Architecture
 
