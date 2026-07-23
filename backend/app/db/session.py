@@ -10,27 +10,40 @@ and point it at Postgres, and nothing else changes.
 """
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.config import get_settings
 
 settings = get_settings()
 
-# SQLite needs check_same_thread=False for use with FastAPI's threaded
-# request handling. PostgreSQL doesn't need (or accept) this argument.
-connect_args = (
-    {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {
-    }
-)
+if settings.is_postgres:
+    engine = create_engine(
+        settings.DATABASE_URL,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+    )
+else:
+    # SQLite: StaticPool lets all FastAPI threads share one connection,
+    # avoiding QueuePool timeout when concurrent requests arrive while a
+    # slow endpoint (e.g. resume upload with LLM calls) holds the sole
+    # connection open.
+    engine = create_engine(
+        settings.DATABASE_URL,
+        pool_pre_ping=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    connect_args=connect_args,
-)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-Base = declarative_base()
+
+from sqlalchemy.orm import DeclarativeBase
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 def get_db():

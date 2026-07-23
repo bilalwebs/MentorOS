@@ -2,11 +2,10 @@
 services/resume_service.py
 
 The resume upload pipeline, end to end:
-1. Save the uploaded file to disk, record it in the DB.
-2. Extract raw text (PDF via pypdf; .txt read directly).
-3. Send that text through the EXTRACTION AI pipeline (Qwen, low temp,
+1. Accept the uploaded file and extract text immediately.
+2. Send that text through the EXTRACTION AI pipeline (Qwen, low temp,
    forced JSON) to get structured facts.
-4. Persist those facts into the normal domain tables (skills, projects,
+3. Persist those facts into the normal domain tables (skills, projects,
    certificates, profile) by reusing student_data_service — this means
    resume-derived data flows through the exact same memory-writing path
    as manually-entered data. No separate/duplicate memory logic to
@@ -36,14 +35,12 @@ from app.services import student_data_service
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-UPLOAD_DIR = Path("uploaded_resumes")
 ALLOWED_EXTENSIONS = {".pdf", ".txt"}
-MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB — generous for a resume, small enough to not need streaming
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 def _extract_text_from_pdf(file_bytes: bytes) -> str:
     import io
-
     from pypdf import PdfReader
 
     reader = PdfReader(io.BytesIO(file_bytes))
@@ -63,18 +60,12 @@ def upload_and_process_resume(db: Session, user_id: int, file: UploadFile) -> di
     if len(file_bytes) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 5MB).")
 
-    # --- 1. Save to disk + record in DB ---
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    safe_filename = f"user_{user_id}_{file.filename}"
-    file_path = UPLOAD_DIR / safe_filename
-    file_path.write_bytes(file_bytes)
-
     resume_repo = ResumeRepository(db)
+    safe_filename = f"user_{user_id}_{file.filename}"
     resume = resume_repo.create(
-        user_id=user_id, file_path=str(file_path), original_filename=file.filename or "resume"
+        user_id=user_id, file_path=f"virtual://{safe_filename}", original_filename=file.filename or "resume"
     )
 
-    # --- 2. Extract raw text ---
     try:
         if extension == ".pdf":
             resume_text = _extract_text_from_pdf(file_bytes)
@@ -92,7 +83,6 @@ def upload_and_process_resume(db: Session, user_id: int, file: UploadFile) -> di
             detail="No extractable text found in the uploaded file.",
         )
 
-    # --- 3. AI extraction (structured facts) ---
     llm = get_llm_provider()
     try:
         facts = llm.extract_structured(
@@ -105,9 +95,7 @@ def upload_and_process_resume(db: Session, user_id: int, file: UploadFile) -> di
             detail=f"AI extraction failed: {exc}. The resume was saved but not parsed — you can retry.",
         ) from exc
 
-    # --- 4. Persist extracted facts through the normal domain services ---
     summary = _apply_extracted_facts(db, user_id, facts)
-
     resume_repo.mark_parsed(resume)
 
     return {
@@ -118,12 +106,6 @@ def upload_and_process_resume(db: Session, user_id: int, file: UploadFile) -> di
 
 
 def _apply_extracted_facts(db: Session, user_id: int, facts: dict) -> dict:
-    """
-    Writes extracted facts into the real domain tables via the existing
-    student_data_service functions — same validation, same memory-writing
-    behavior as manual entry. Each category is wrapped individually so one
-    bad entry (e.g. a malformed date) doesn't discard the whole extraction.
-    """
     created = {
         "skills": 0, "projects": 0, "certificates": 0,
         "profile_updated": False, "career_goal_set": False,

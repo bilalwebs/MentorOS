@@ -9,15 +9,17 @@ import { ResumeStatusCard } from "@/components/dashboard/resume-status-card";
 import { RecommendationPanel } from "@/components/dashboard/recommendation-panel";
 import { ActivityTimeline } from "@/components/dashboard/activity-timeline";
 import { useAuth } from "@/lib/auth-context";
+import { useProfile } from "@/hooks/useProfile";
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const firstName = user?.email?.split("@")[0];
+  const { data: profile } = useProfile();
+  const displayName = profile?.full_name || user?.email?.split("@")[0] || "";
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Welcome back${firstName ? `, ${firstName}` : ""}`}
+        title={`Welcome back${displayName ? `, ${displayName}` : ""}`}
         description="Here's what your AI mentor remembers and recommends today."
         actions={<QuickActions />}
       />

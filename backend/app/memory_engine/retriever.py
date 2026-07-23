@@ -13,16 +13,19 @@ up when something is actually used) — this is what keeps frequently
 relevant memories from decaying even as time passes.
 """
 
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
 from app.ai.llm_provider import LLMProvider
 from app.core.config import get_settings
-from app.memory_engine import chroma_client
+from app.memory_engine import vector_store
 from app.memory_engine.importance import apply_access_boost, composite_retrieval_score
 from app.models.memory import Memory
 from app.models.mixins import MemoryStatus
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -46,10 +49,23 @@ class MemoryRetriever:
     def retrieve(self, user_id: int, query_text: str, top_k: int | None = None) -> list[Memory]:
         top_k = top_k or settings.MEMORY_RETRIEVAL_TOP_K
 
-        query_embedding = self.llm.embed([query_text])[0]
-        chroma_hits = chroma_client.query_similar(
-            embedding=query_embedding, user_id=user_id, top_k=top_k, active_only=True
-        )
+        try:
+            query_embedding = self.llm.embed([query_text])[0]
+        except Exception:
+            logger.warning(
+                "Embedding failed for retrieval query — returning empty results. "
+                "This usually means the embedding model is unavailable or the API key lacks access."
+            )
+            return []
+
+        try:
+            chroma_hits = vector_store.query_similar(
+                embedding=query_embedding, user_id=user_id, top_k=top_k, active_only=True
+            )
+        except Exception:
+            logger.warning("Vector store query failed — returning empty results.")
+            return []
+
         if not chroma_hits:
             return []
 

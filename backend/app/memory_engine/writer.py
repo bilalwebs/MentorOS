@@ -4,11 +4,11 @@ memory_engine/writer.py
 MemoryWriter is the ONLY code path that creates or updates a Memory row.
 Centralizing this (rather than letting services write memories ad hoc)
 guarantees every memory gets an embedding, an importance score, and a
-consistent SQL+Chroma write — the dual-store sync the architecture
+consistent SQL+vector write — the dual-store sync the architecture
 depends on.
 
-Write order is deliberate: SQL first (source of truth), then Chroma. If
-the Chroma write fails, the SQL row still exists and is simply
+Write order is deliberate: SQL first (source of truth), then vector store.
+If the vector write fails, the SQL row still exists and is simply
 unsearchable-by-similarity until a retry — degraded, not lost. The
 reverse order risks an orphaned vector with no backing record.
 """
@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.ai.llm_provider import LLMProvider
-from app.memory_engine import chroma_client
+from app.memory_engine import vector_store
 from app.memory_engine.importance import initial_importance
 from app.models.memory import Memory
 from app.models.mixins import MemoryStatus, MemoryType
@@ -40,7 +40,7 @@ class MemoryWriter:
     ) -> Memory:
         """
         Create a new memory: embed the content, assign initial importance,
-        write to SQL, then write the matching vector to Chroma.
+        write to SQL, then write the matching vector to the vector store.
         """
         chroma_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
@@ -62,15 +62,21 @@ class MemoryWriter:
         self.db.commit()
         self.db.refresh(memory)
 
-        embedding = self.llm.embed([content_text])[0]
-        chroma_client.upsert_memory_vector(
-            chroma_id=chroma_id,
-            embedding=embedding,
-            user_id=user_id,
-            memory_id=memory.id,
-            memory_type=memory_type.value,
-            status=MemoryStatus.ACTIVE.value,
-        )
+        try:
+            embedding = self.llm.embed([content_text])[0]
+            vector_store.upsert_memory_vector(
+                chroma_id=chroma_id,
+                embedding=embedding,
+                user_id=user_id,
+                memory_id=memory.id,
+                memory_type=memory_type.value,
+                status=MemoryStatus.ACTIVE.value,
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Vector write failed for memory_id=%s — memory saved in SQL only.", memory.id
+            )
 
         return memory
 
@@ -85,10 +91,13 @@ class MemoryWriter:
         old_memory.updated_at = datetime.now(timezone.utc)
         self.db.commit()
 
-        # Re-sync the old vector's status in Chroma so it drops out of
-        # active-only similarity search immediately. Metadata-only update —
-        # no re-embedding needed.
-        chroma_client.update_memory_status(old_memory.chroma_id, MemoryStatus.SUPERSEDED.value)
+        try:
+            vector_store.update_memory_status(old_memory.chroma_id, MemoryStatus.SUPERSEDED.value)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Vector status update failed for memory_id=%s", old_memory.id
+            )
 
         new_memory = self.write(
             user_id=old_memory.user_id,
@@ -98,8 +107,6 @@ class MemoryWriter:
             source_id=old_memory.source_id,
         )
 
-        # Link old -> new so the timeline UI can render "this replaced that"
-        # explicitly, not just infer it from matching timestamps/source_id.
         old_memory.superseded_by_id = new_memory.id
         self.db.commit()
 
@@ -111,4 +118,10 @@ class MemoryWriter:
         memory.updated_at = datetime.now(timezone.utc)
         self.db.commit()
 
-        chroma_client.update_memory_status(memory.chroma_id, MemoryStatus.ARCHIVED.value)
+        try:
+            vector_store.update_memory_status(memory.chroma_id, MemoryStatus.ARCHIVED.value)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Vector status update failed for memory_id=%s", memory.id
+            )

@@ -65,7 +65,11 @@ def generate_recommendation(db: Session, user_id: int, llm: LLMProvider, insight
     memory_context = build_memory_context_block(_memories_to_dicts(memories))
     task_prompt = _PROMPT_BUILDER_BY_TYPE[insight_type](memory_context)
 
-    content = llm.generate(MENTOR_SYSTEM_PROMPT, task_prompt, temperature=0.7)
+    try:
+        content = llm.generate(MENTOR_SYSTEM_PROMPT, task_prompt, temperature=0.7)
+    except Exception as exc:
+        logger.error("Qwen generate failed for insight_type=%s: %s", insight_type, exc)
+        raise
 
     insight = AIInsight(
         user_id=user_id,

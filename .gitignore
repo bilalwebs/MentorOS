@@ -36,9 +36,13 @@ htmlcov/
 # ChromaDB
 # ==========================
 backend/chroma_store/
+backend/test_chroma_store/
 
 # Uploaded Files
 backend/uploaded_resumes/
+
+# Test artifacts
+backend/test_*.db
 
 # ==========================
 # Node.js

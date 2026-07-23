@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "MentorOS"
     ENV: str = "development"  # "development" | "production"
     DEBUG: bool = True
+    FRONTEND_URL: str = "http://localhost:3000"
 
     # --- Database ---
     # Default: local SQLite file, zero setup required.
@@ -38,6 +39,11 @@ class Settings(BaseSettings):
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_MODEL: str = "qwen-plus"
     QWEN_EMBEDDING_MODEL: str = "text-embedding-v2"
+    QWEN_EMBEDDING_DIMENSIONS: int = 1024
+
+    # --- Vector Store ---
+    # "chroma" for local dev (SQLite + ChromaDB), "pgvector" for production (PostgreSQL)
+    VECTOR_BACKEND: str = "auto"  # "auto" | "chroma" | "pgvector"
 
     # --- ChromaDB ---
     # Persistent local client by default (a folder on disk).
@@ -50,6 +56,16 @@ class Settings(BaseSettings):
     MEMORY_RETRIEVAL_TOP_K: int = 8
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @property
+    def is_postgres(self) -> bool:
+        return self.DATABASE_URL.startswith("postgresql")
+
+    @property
+    def effective_vector_backend(self) -> str:
+        if self.VECTOR_BACKEND == "auto":
+            return "pgvector" if self.is_postgres else "chroma"
+        return self.VECTOR_BACKEND
 
 
 @lru_cache

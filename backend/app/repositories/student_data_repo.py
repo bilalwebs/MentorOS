@@ -47,8 +47,7 @@ class ProfileRepository:
 
     def update(self, profile: Profile, **kwargs) -> Profile:
         for key, value in kwargs.items():
-            if value is not None:
-                setattr(profile, key, value)
+            setattr(profile, key, value)
         self.db.commit()
         self.db.refresh(profile)
         return profile

@@ -19,7 +19,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.ai.llm_provider import LLMProvider
-from app.memory_engine import chroma_client
+from app.memory_engine import vector_store
 from app.memory_engine.decay import run_decay_for_user
 from app.memory_engine.writer import MemoryWriter
 from app.models.memory import Memory
@@ -41,7 +41,7 @@ def delete_memory(db: Session, user_id: int, memory_id: int) -> None:
     if not memory:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Memory not found.")
 
-    chroma_client.delete_memory_vector(memory.chroma_id)
+    vector_store.delete_memory_vector(memory.chroma_id)
     db.delete(memory)
     db.commit()
 

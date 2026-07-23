@@ -9,6 +9,7 @@ startup for local dev convenience (Postgres/prod should use Alembic
 migrations instead — see README).
 """
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -21,12 +22,28 @@ from app.db.session import Base, engine
 settings = get_settings()
 
 
+def _build_cors_origins() -> list[str]:
+    """Build CORS origins from config + common dev defaults."""
+    origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+    ]
+    if settings.FRONTEND_URL and settings.FRONTEND_URL not in origins:
+        origins.append(settings.FRONTEND_URL)
+    extra = os.environ.get("CORS_ORIGINS", "")
+    if extra:
+        for o in extra.split(","):
+            o = o.strip()
+            if o and o not in origins:
+                origins.append(o)
+    return origins
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.ENV == "development":
-        Base.metadata.create_all(bind=engine)
-
+    Base.metadata.create_all(bind=engine)
     yield
+
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -35,13 +52,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Streamlit runs on a different port/origin during local dev.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://mentoros-ai.vercel.app",
-    ],
+    allow_origins=_build_cors_origins(),
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -51,11 +65,13 @@ app.add_middleware(
 @app.get("/health", tags=["system"])
 def health_check():
     """Simple liveness check — also useful to confirm .env loaded correctly."""
+    db_type = "sqlite" if settings.DATABASE_URL.startswith("sqlite") else "postgresql"
     return {
         "status": "ok",
         "app": settings.APP_NAME,
         "env": settings.ENV,
-        "database": "sqlite" if settings.DATABASE_URL.startswith("sqlite") else "postgresql",
+        "database": db_type,
+        "vector_backend": settings.effective_vector_backend,
     }
 
 
@@ -83,5 +99,3 @@ app.include_router(resume.router, prefix="/resume", tags=["resume"])
 app.include_router(memory.router, prefix="/memory", tags=["memory"])
 app.include_router(recommendations.router,
                    prefix="/recommendations", tags=["recommendations"])
-
-# Further routers (dashboard/analytics) are added here as they're built.
